@@ -1,0 +1,27 @@
+{
+  "required": true,
+  "package": "restudio.reglass.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "mixins": [
+    "client.MinecraftClientMixin",
+    "widgets.SliderWidgetMixin",
+    "widgets.TooltipStateMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "overwrites": {
+    "requireAnnotations": true
+  },
+  "client": [
+
+    "accessor.SliderWidgetAccessor",
+    "client.InGameHudMixin",
+    "client.ScreenMixin",
+    "client.TitleScreenMixin",
+    "logical.GameRendererMixin",
+
+    "widgets.ClickableWidgetMixin",
+    "widgets.DrawContextMixin"
+  ]
+}
