@@ -1,6 +1,6 @@
 # ReGlass: 从 v1.21.8+ 移植到 v1.21.1 的重实现说明
 
-本文档说明基于原始仓库 https://github.com/RedxAx/ReGlass 的源代码，将其从 v1.21.8+ 版本移植并以 v1.21.1 ABI/行为为目标进行重实现的工作要点。
+本文档说明基于原始仓库 https://github.com/RedxAx/ReGlass 的源代码，将其从 mc1.21.8+ 版本移植并以 mc1.21.1 ABI/行为为目标进行重实现的工作要点。
 
 ## 目的
 
