@@ -1,9 +1,9 @@
 package restudio.reglass.mixin.widgets;
 
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.widget.ClickableWidget;
-import net.minecraft.client.gui.widget.PressableWidget;
-import net.minecraft.client.gui.widget.SliderWidget;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.components.AbstractButton;
+import net.minecraft.client.gui.components.AbstractSliderButton;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -12,21 +12,21 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import restudio.reglass.client.LiquidGlassForegroundRuntime;
 import restudio.reglass.client.api.ReGlassConfig;
 
-/** Captures complete widget foreground content, including text and icons. */
-@Mixin(ClickableWidget.class)
+/** Captures complete widget foreground content, including Component and icons. */
+@Mixin(AbstractWidget.class)
 public abstract class ClickableWidgetMixin {
     @Unique
     private boolean reglass$ownsForegroundCapture;
 
     @Inject(method = "render", at = @At("HEAD"))
     private void reglass$beginWidgetForeground(
-            DrawContext context, int mouseX, int mouseY, float delta, CallbackInfo ci
+            GuiGraphics context, int mouseX, int mouseY, float delta, CallbackInfo ci
     ) {
-        ClickableWidget widget = (ClickableWidget) (Object) this;
+        AbstractWidget widget = (AbstractWidget) (Object) this;
         ReGlassConfig.Features features = ReGlassConfig.INSTANCE.features;
         boolean redesign = features.enableRedesign;
-        boolean supported = (widget instanceof PressableWidget && features.buttons)
-                || (widget instanceof SliderWidget && features.sliders);
+        boolean supported = (widget instanceof AbstractButton && features.buttons)
+                || (widget instanceof AbstractSliderButton && features.sliders);
         LiquidGlassForegroundRuntime foreground = LiquidGlassForegroundRuntime.get();
         if (redesign && supported && !foreground.isCapturing()) {
             foreground.beginCapture();
@@ -36,7 +36,7 @@ public abstract class ClickableWidgetMixin {
 
     @Inject(method = "render", at = @At("TAIL"))
     private void reglass$endWidgetForeground(
-            DrawContext context, int mouseX, int mouseY, float delta, CallbackInfo ci
+            GuiGraphics context, int mouseX, int mouseY, float delta, CallbackInfo ci
     ) {
         if (reglass$ownsForegroundCapture) {
             LiquidGlassForegroundRuntime.get().endCapture();

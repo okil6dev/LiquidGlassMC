@@ -1,11 +1,10 @@
 {
   "required": true,
   "package": "restudio.reglass.mixin",
-  "compatibilityLevel": "JAVA_17",
+  "compatibilityLevel": "JAVA_21",
   "mixins": [
     "client.MinecraftClientMixin",
-    "widgets.SliderWidgetMixin",
-    "widgets.TooltipStateMixin"
+    "widgets.SliderWidgetMixin"
   ],
   "injectors": {
     "defaultRequire": 1

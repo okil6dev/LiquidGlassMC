@@ -1,27 +1,27 @@
 package restudio.reglass.client.ui;
 
 import java.util.function.Consumer;
-import net.minecraft.client.gui.widget.SliderWidget;
-import net.minecraft.text.Text;
+import net.minecraft.client.gui.components.AbstractSliderButton;
+import net.minecraft.network.chat.Component;
 import restudio.reglass.mixin.accessor.SliderWidgetAccessor;
 
-public class MappedSlider extends SliderWidget {
+public class MappedSlider extends AbstractSliderButton {
 
     private final double min;
     private final double max;
     private final Consumer<Double> onChange;
     private final boolean integer;
-    private final Text originalMessage = this.getMessage();
+    private final Component originalMessage = this.getMessage();
 
-    public static MappedSlider floatSlider(int x, int y, int width, int height, Text msg, double min, double max, double init, Consumer<Double> onChange) {
+    public static MappedSlider floatSlider(int x, int y, int width, int height, Component msg, double min, double max, double init, Consumer<Double> onChange) {
         return new MappedSlider(x, y, width, height, msg, min, max, init, onChange, false);
     }
 
-    public static MappedSlider intSlider(int x, int y, int width, int height, Text msg, int min, int max, int init, Consumer<Integer> onChange) {
+    public static MappedSlider intSlider(int x, int y, int width, int height, Component msg, int min, int max, int init, Consumer<Integer> onChange) {
         return new MappedSlider(x, y, width, height, msg, min, max, init, d -> onChange.accept(d.intValue()), true);
     }
 
-    private MappedSlider(int x, int y, int width, int height, Text message, double min, double max, double init, Consumer<Double> onChange, boolean integer) {
+    private MappedSlider(int x, int y, int width, int height, Component message, double min, double max, double init, Consumer<Double> onChange, boolean integer) {
         super(x, y, width, height, message, 0);
         this.min = min;
         this.max = max;
@@ -44,7 +44,7 @@ public class MappedSlider extends SliderWidget {
     protected void updateMessage() {
         double v = map(this.value);
         if (integer) v = Math.round(v);
-        this.setMessage(Text.literal(originalMessage.getString() + ": " + format(v)));
+        this.setMessage(Component.literal(originalMessage.getString() + ": " + format(v)));
     }
 
     private String format(double v) {

@@ -32,6 +32,12 @@ bin/
 
 run/
 
+# decompiled MC sources (temp)
+/com/
+/net/
+javap_out.txt
+fg.txt
+
 # java
 
 hs_err_*.log

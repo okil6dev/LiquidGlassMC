@@ -1,13 +1,13 @@
 package restudio.reglass.client;
 
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.narration.NarrationMessageBuilder;
-import net.minecraft.client.gui.widget.ClickableWidget;
-import net.minecraft.text.Text;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.narration.NarrationElementOutput;
+import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.network.chat.Component;
 import restudio.reglass.client.api.ReGlassApi;
 import restudio.reglass.client.api.WidgetStyle;
 
-public class LiquidGlassWidget extends ClickableWidget {
+public class LiquidGlassWidget extends AbstractWidget {
     private float cornerRadiusPx;
     private boolean moveable;
     private boolean dragging;
@@ -16,7 +16,7 @@ public class LiquidGlassWidget extends ClickableWidget {
     public WidgetStyle style = new WidgetStyle();
 
     public LiquidGlassWidget(int x, int y, int width, int height, WidgetStyle style) {
-        super(x, y, width, height, Text.empty());
+        super(x, y, width, height, Component.empty());
         this.cornerRadiusPx = 0.5f * Math.min(width, height);
         if (style != null) this.style = style;
     }
@@ -32,7 +32,7 @@ public class LiquidGlassWidget extends ClickableWidget {
     }
 
     @Override
-    public void renderWidget(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void renderWidget(GuiGraphics context, int mouseX, int mouseY, float delta) {
         ReGlassApi.create(context).fromWidget(this).cornerRadius(cornerRadiusPx).style(this.style).render();
         LiquidGlassUniforms.get().tryApplyBlur(context);
     }
@@ -70,5 +70,5 @@ public class LiquidGlassWidget extends ClickableWidget {
         return super.mouseReleased(mouseX, mouseY, button);
     }
 
-    @Override protected void appendClickableNarrations(NarrationMessageBuilder builder) {}
+    @Override protected void updateWidgetNarration(NarrationElementOutput builder) {}
 }

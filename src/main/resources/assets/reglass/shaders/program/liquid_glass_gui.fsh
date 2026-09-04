@@ -90,12 +90,11 @@ SDFResult opHardSubtract(SDFResult a, SDFResult b) {
 }
 
 vec4 sampleBlur(int idx, vec2 uv) {
-    vec2 clampedUV = clamp(uv, 0.0, 1.0);
-    if (idx <= 0) return texture(Sampler1, clampedUV);
-    if (idx == 1) return texture(Sampler2, clampedUV);
-    if (idx == 2) return texture(Sampler3, clampedUV);
-    if (idx == 3) return texture(Sampler4, clampedUV);
-    return texture(Sampler5, clampedUV);
+    if (idx <= 0) return texture(Sampler1, uv);
+    if (idx == 1) return texture(Sampler2, uv);
+    if (idx == 2) return texture(Sampler3, uv);
+    if (idx == 3) return texture(Sampler4, uv);
+    return texture(Sampler5, uv);
 }
 
 SDFResult fieldWidgets(vec2 p, vec2 inSize, vec2 fragCoord) {

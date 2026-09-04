@@ -1,15 +1,14 @@
 package restudio.reglass.mixin.logical;
 
 import java.util.List;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gl.Framebuffer;
-import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.client.render.BufferRenderer;
-import net.minecraft.client.render.GameRenderer;
-import net.minecraft.client.render.RenderTickCounter;
-import net.minecraft.client.render.Tessellator;
-import net.minecraft.client.render.VertexFormat;
-import net.minecraft.client.render.VertexFormats;
+import net.minecraft.client.Minecraft;
+import com.mojang.blaze3d.pipeline.RenderTarget;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.BufferUploader;
+import net.minecraft.client.renderer.GameRenderer;
+import net.minecraft.client.DeltaTracker;
+import com.mojang.blaze3d.vertex.Tesselator;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL13;
@@ -40,16 +39,20 @@ public abstract class GameRendererMixin {
     private static int cachedVao = -1;
     @Unique
     private static int cachedVbo = -1;
+    @Unique
+    private static int reglass$lastFbW = -1;
+    @Unique
+    private static int reglass$lastFbH = -1;
 
-    @Shadow @Final private MinecraftClient client;
+    @Shadow @Final private Minecraft minecraft;
 
-    // ── Frame setup ──
+    // â”€â”€ Frame setup â”€â”€
 
     @Inject(method = "render", at = @At("HEAD"))
-    private void reglass$beginGuiFrame(RenderTickCounter tickCounter, boolean tick, CallbackInfo ci) {
+    private void reglass$beginGuiFrame(DeltaTracker tickCounter, boolean tick, CallbackInfo ci) {
         double deltaTicks;
         try {
-            deltaTicks = tickCounter.getTickDelta(true);
+            deltaTicks = tickCounter.getGameTimeDeltaPartialTick(true);
         } catch (Throwable t) {
             deltaTicks = 1.0 / 60.0 * 20.0;
         }
@@ -59,20 +62,49 @@ public abstract class GameRendererMixin {
         ReGlassAnim.INSTANCE.update(ReGlassConfig.INSTANCE, dt);
     }
 
-    // ── Liquid-glass rendering ──
+    // â”€â”€ Liquid-glass rendering â”€â”€
     //
-    // NOTE: In Minecraft 1.21.1, GameRenderer.renderBlur() is never called — it exists as a
+    // NOTE: In Minecraft 1.21.1, GameRenderer.renderBlur() is never called â€” it exists as a
     // method but no code path invokes it. We inject at render() TAIL instead, which runs
     // every frame after HUD + screen rendering is complete and widgets have been registered.
 
     @Unique
     private static final Logger LOGGER = LoggerFactory.getLogger("ReGlass/GameRenderer");
     @Inject(method = "render", at = @At("TAIL"))
-    private void reglass$renderLiquidGlass(RenderTickCounter tickCounter, boolean tick, CallbackInfo ci) {
+    private void reglass$renderLiquidGlass(DeltaTracker tickCounter, boolean tick, CallbackInfo ci) {
         LiquidGlassUniforms uniforms = LiquidGlassUniforms.get();
         LiquidGlassForegroundRuntime foreground = LiquidGlassForegroundRuntime.get();
         int count = uniforms.getCount();
         if (count <= 0) {
+            foreground.composite();
+            return;
+        }
+
+        RenderTarget mainFb = this.minecraft.getMainRenderTarget();
+        if (mainFb.width != reglass$lastFbW || mainFb.height != reglass$lastFbH) {
+            // Window or resolution scaled: skip glass one frame so the off-screen
+            // targets settle at the new size. Rendering on the transition frame
+            // can snapshot mismatched framebuffers and paint the whole screen black.
+            reglass$lastFbW = mainFb.width;
+            reglass$lastFbH = mainFb.height;
+            // DIAG: report every frame where the pipeline sees a size transition, so a
+            // black-background-on-resize can be tied to the exact metric that moved.
+            try {
+                int ww = (int) this.minecraft.getWindow().getWidth();
+                int wh = (int) this.minecraft.getWindow().getHeight();
+                float gs = (float) this.minecraft.getWindow().getGuiScale();
+                LOGGER.info("ReGlass resize detect: mainFb={}x{} win={}x{} guiScale={} widgets={}",
+                        mainFb.width, mainFb.height, ww, wh, gs, count);
+            } catch (Throwable t) {
+                LOGGER.info("ReGlass resize detect (bare): mainFb={}x{} widgets={}",
+                        mainFb.width, mainFb.height, count);
+            }
+            // Force full re-creation of all off-screen framebuffers so the blur and
+            // foreground targets are re-allocated against the freshly-regenerated main
+            // target. This is the fix for the known "incomplete buffer regeneration on
+            // resize" bug that otherwise leaves the background black.
+            LiquidGlassPrecomputeRuntime.get().invalidateBuffers();
+            LiquidGlassForegroundRuntime.get().invalidateBuffer();
             foreground.composite();
             return;
         }
@@ -90,8 +122,6 @@ public abstract class GameRendererMixin {
             foreground.composite();
             return;
         }
-
-        Framebuffer mainFb = this.client.getFramebuffer();
 
         // Save GL state
         int prevProgram = GL20.glGetInteger(GL20.GL_CURRENT_PROGRAM);
@@ -137,11 +167,11 @@ public abstract class GameRendererMixin {
         // Set DiffuseSampler to texture unit 0
         GL20.glUniform1i(GL20.glGetUniformLocation(program, "DiffuseSampler"), 0);
 
-        // Copy main framebuffer colour attachment to a temp texture so we don't
+        // Copy main RenderTarget colour attachment to a temp texture so we don't
         // read from the same FBO we are writing to (undefined behaviour in GL).
-        int srcTex = mainFb.getColorAttachment();
-        int fbW = mainFb.textureWidth;
-        int fbH = mainFb.textureHeight;
+        int srcTex = mainFb.getColorTextureId();
+        int fbW = mainFb.width;
+        int fbH = mainFb.height;
 
         int tmpTex = GL11.glGenTextures();
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, tmpTex);
@@ -161,8 +191,10 @@ public abstract class GameRendererMixin {
         GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0,
                 GL11.GL_TEXTURE_2D, tmpTex, 0);
 
-        // READ framebuffer is still mainFb (prevDrawFbo = mainFb's handle)
-        GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, prevDrawFbo);
+        // READ from the main render target own framebuffer (not whatever the
+        // current draw binding happens to be) so the snapshot is always the main
+        // target. A stale/wrong read binding here is what turns the background black.
+        GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, mainFb.frameBufferId);
         GL30.glBlitFramebuffer(0, 0, fbW, fbH, 0, 0, fbW, fbH,
                 GL11.GL_COLOR_BUFFER_BIT, GL11.GL_NEAREST);
 
@@ -177,7 +209,7 @@ public abstract class GameRendererMixin {
         // Bind per-radius blur textures to units 1-5
         for (int i = 0; i < LiquidGlassUniforms.MAX_BLUR_LEVELS; i++) {
             int unit = i + 1;
-            int texId = resolveBlurTextureId(mainFb, radii, i);
+            int texId = resolveBlurTextureId(mainFb, radii, i, tmpTex);
             GL13.glActiveTexture(GL13.GL_TEXTURE0 + unit);
             GL11.glBindTexture(GL11.GL_TEXTURE_2D, texId);
             GL20.glUniform1i(GL20.glGetUniformLocation(program, "Sampler" + (i + 1)), unit);
@@ -191,7 +223,7 @@ public abstract class GameRendererMixin {
        GL11.glDisable(GL11.GL_DEPTH_TEST);
        GL11.glDepthMask(false);
 
-       // Ensure viewport covers the full framebuffer so our [0,1] NDC quad maps correctly
+       // Ensure viewport covers the full RenderTarget so our [0,1] NDC quad maps correctly
        int[] viewport = new int[4];
        GL11.glGetIntegerv(GL11.GL_VIEWPORT, viewport);
         GL11.glViewport(0, 0, fbW, fbH);
@@ -222,10 +254,10 @@ public abstract class GameRendererMixin {
             GL30.glBindBuffer(GL30.GL_ARRAY_BUFFER, cachedVbo);
             GL30.glBufferData(GL30.GL_ARRAY_BUFFER, vertBuf, GL30.GL_STATIC_DRAW);
 
-            // Attrib 0: Position (vec3) — location 0 in vertex shader
+            // Attrib 0: Position (vec3) â€” location 0 in vertex shader
             GL20.glEnableVertexAttribArray(0);
             GL20.glVertexAttribPointer(0, 3, GL11.GL_FLOAT, false, 5 * 4, 0);
-            // Attrib 1: TexCoord (vec2) — not used by our shader but required by POSITION_TEXTURE format
+            // Attrib 1: TexCoord (vec2) â€” not used by our shader but required by POSITION_TEXTURE format
             GL20.glEnableVertexAttribArray(1);
             GL20.glVertexAttribPointer(1, 2, GL11.GL_FLOAT, false, 5 * 4, 3 * 4);
 
@@ -272,10 +304,15 @@ public abstract class GameRendererMixin {
         foreground.composite();
     }
 
-    // ── Texture resolution ──
+    // â”€â”€ Texture resolution â”€â”€
 
-    private int resolveBlurTextureId(Framebuffer mainFb, List<Integer> radii, int index) {
-        int fallback = mainFb.getColorAttachment();
+    private int resolveBlurTextureId(RenderTarget mainFb, List<Integer> radii, int index, int fallbackTex) {
+        // Fallback MUST be the frozen pre-pass copy (tmpTex / Sampler0's texture),
+        // never the live main target. The glass pass draws INTO mainFb, so binding
+        // mainFb's own color texture as a sampler while writing to it is undefined
+        // GL behavior — on many GPUs it scrambles the whole frame, most visibly over
+        // the bright sky/world in-game.
+        int fallback = fallbackTex;
         int radius;
         if (index < radii.size()) {
             radius = radii.get(index);
@@ -285,8 +322,8 @@ public abstract class GameRendererMixin {
             return fallback;
         }
         if (radius <= 0) return fallback;
-        Framebuffer blurFb = LiquidGlassPrecomputeRuntime.get().getBlurredViewForRadius(radius);
-        return (blurFb != null) ? blurFb.getColorAttachment() : fallback;
+        RenderTarget blurFb = LiquidGlassPrecomputeRuntime.get().getBlurredViewForRadius(radius);
+        return (blurFb != null) ? blurFb.getColorTextureId() : fallback;
     }
 
 }

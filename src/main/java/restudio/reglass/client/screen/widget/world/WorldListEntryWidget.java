@@ -1,14 +1,14 @@
 package restudio.reglass.client.screen.widget.world;
 
 import com.mojang.logging.LogUtils;
-import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.Minecraft;
 
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.texture.NativeImage;
-import net.minecraft.client.texture.NativeImageBackedTexture;
-import net.minecraft.text.MutableText;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
+import net.minecraft.client.gui.GuiGraphics;
+import com.mojang.blaze3d.platform.NativeImage;
+import net.minecraft.client.renderer.texture.DynamicTexture;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.storage.LevelSummary;
 import org.slf4j.Logger;
 import restudio.reglass.client.api.ReGlassApi;
@@ -26,49 +26,49 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.FormatStyle;
 public class WorldListEntryWidget extends ScrollableListWidget.Entry<WorldListEntryWidget> {
     private static final Logger LOGGER = LogUtils.getLogger();
-    private static final Identifier DEFAULT_ICON_ID = Identifier.of("textures/misc/unknown_server.png");
+    private static final ResourceLocation DEFAULT_ICON_ID = ResourceLocation.withDefaultNamespace("textures/misc/unknown_server.png");
     public static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT).withZone(ZoneId.systemDefault());
 
-    private final MinecraftClient client;
+    private final Minecraft client;
     private final CustomWorldSelectScreen parent;
     private final LevelSummary summary;
-    private final Identifier iconId;
+    private final ResourceLocation iconId;
     private final WidgetStyle defaultStyle = new WidgetStyle().tint(0x000000, 0.1f);
     private final WidgetStyle hoveredStyle = new WidgetStyle().tint(0xFFFFFF, 0.1f);
     private final WidgetStyle selectedStyle = new WidgetStyle().tint(0xFFFFFF, 0.2f);
 
-    private NativeImageBackedTexture iconTexture;
+    private DynamicTexture iconTexture;
 
     public WorldListEntryWidget(CustomWorldSelectScreen parent, LevelSummary summary, int x, int y, int height) {
         super(x, y, parent.width - 150 - 40, height);
         this.parent = parent;
         this.summary = summary;
-        this.client = MinecraftClient.getInstance();
-        String safeName = summary.getName().toLowerCase().replaceAll("[^a-z0-9/._-]", "_");
-        this.iconId = Identifier.of("world-select/icon/" + safeName);
+        this.client = Minecraft.getInstance();
+        String safeName = summary.getLevelId().toLowerCase().replaceAll("[^a-z0-9/._-]", "_");
+        this.iconId = ResourceLocation.fromNamespaceAndPath("reglass", "world-select/icon/" + safeName);
 
         loadIcon();
     }
 
     private void loadIcon() {
-        File iconFile = summary.getIconPath().toFile();
+        File iconFile = summary.getIcon().toFile();
         if (Files.isRegularFile(iconFile.toPath())) {
             try (InputStream inputStream = Files.newInputStream(iconFile.toPath())) {
                 NativeImage image = NativeImage.read(inputStream);
                 if (this.iconTexture != null) {
                     this.iconTexture.close();
                 }
-        this.iconTexture = new NativeImageBackedTexture(image);
-                this.client.getTextureManager().registerTexture(this.iconId, this.iconTexture);
+        this.iconTexture = new DynamicTexture(image);
+                this.client.getTextureManager().register(this.iconId, this.iconTexture);
             } catch (Exception e) {
-                LOGGER.error("Failed to load world icon for {}", summary.getName(), e);
+                LOGGER.error("Failed to load world icon for {}", summary.getLevelId(), e);
                 this.iconTexture = null;
             }
         }
     }
 
     @Override
-    public void render(DrawContext context, int index, int x, int y, int width, int height, int mouseX, int mouseY, boolean hovered, float delta) {
+    public void render(GuiGraphics context, int index, int x, int y, int width, int height, int mouseX, int mouseY, boolean hovered, float delta) {
         super.render(context, index, x, y, width, height, mouseX, mouseY, hovered, delta);
 
         boolean isSelected = this.parent.getList().getSelectedEntries().contains(this);
@@ -88,25 +88,25 @@ public class WorldListEntryWidget extends ScrollableListWidget.Entry<WorldListEn
                 .focus(isSelected ? 1f : 0f)
                 .render();
 
-        String displayName = summary.getDisplayName();
-        String name = summary.getName();
+        String displayName = summary.getLevelName();
+        String name = summary.getLevelId();
         long lastPlayed = summary.getLastPlayed();
         if (lastPlayed != -1L) {
             name = name + " (" + DATE_FORMAT.format(Instant.ofEpochMilli(lastPlayed)) + ")";
         }
 
         if (displayName == null || displayName.isEmpty()) {
-            displayName = Text.translatable("selectWorld.world").getString() + " " + (index + 1);
+            displayName = Component.translatable("selectWorld.world").getString() + " " + (index + 1);
         }
 
-        MutableText details = (MutableText) summary.getDetails();
+        Component details = summary.getInfo();
 
-        context.drawTextWithShadow(client.textRenderer, displayName, x + 40, y + 2, 0xFFFFFFFF);
-        context.drawTextWithShadow(client.textRenderer, name, x + 40, y + 10 + 3, 0xFF808080);
-        context.drawTextWithShadow(client.textRenderer, details, x + 40, y + 10 + 9 + 3, 0xFF808080);
+        context.drawString(client.font, displayName, x + 40, y + 2, 0xFFFFFFFF);
+        context.drawString(client.font, name, x + 40, y + 10 + 3, 0xFF808080);
+        context.drawString(client.font, details, x + 40, y + 10 + 9 + 3, 0xFF808080);
 
-        Identifier texture = this.iconTexture != null ? this.iconId : DEFAULT_ICON_ID;
-        context.drawTexture(texture, x + 2, y + 2, 0, 0, 32, 32, 32, 32);
+        ResourceLocation texture = this.iconTexture != null ? this.iconId : DEFAULT_ICON_ID;
+        context.blit(texture, x + 2, y + 2, 0, 0, 32, 32, 32, 32);
     }
 
     @Override
@@ -125,7 +125,7 @@ public class WorldListEntryWidget extends ScrollableListWidget.Entry<WorldListEn
     @Override
     public void close() {
         if (this.iconTexture != null) {
-            this.client.getTextureManager().destroyTexture(this.iconId);
+            this.client.getTextureManager().release(this.iconId);
             this.iconTexture.close();
             this.iconTexture = null;
         }

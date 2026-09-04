@@ -1,9 +1,9 @@
 package restudio.reglass.client.api;
 
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.ScreenRect;
-import net.minecraft.client.gui.widget.ClickableWidget;
-import net.minecraft.text.Text;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.navigation.ScreenRectangle;
+import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix3x2f;
 import restudio.reglass.client.LiquidGlassUniforms;
@@ -17,27 +17,27 @@ public final class ReGlassApi {
         return ReGlassConfig.INSTANCE;
     }
 
-    public static Builder create(DrawContext context) {
+    public static Builder create(GuiGraphics context) {
         return new Builder(context);
     }
 
     public static class Builder {
-        private final DrawContext context;
+        private final GuiGraphics context;
         private int x, y, width, height;
         private float cornerRadius = -1f;
-        @Nullable private Text text = null;
+        @Nullable private Component Component = null;
         private WidgetStyle style = new WidgetStyle();
         private float hoverAmount = 0f;
         private float focusAmount = 0f;
 
-        private Builder(DrawContext context) {
+        private Builder(GuiGraphics context) {
             this.context = context;
         }
 
-        public Builder fromWidget(ClickableWidget widget) {
+        public Builder fromWidget(AbstractWidget widget) {
             this.position(widget.getX(), widget.getY());
             this.size(widget.getWidth(), widget.getHeight());
-            this.text(widget.getMessage());
+            this.Component(widget.getMessage());
             return this;
         }
 
@@ -62,8 +62,8 @@ public final class ReGlassApi {
             return this;
         }
 
-        public Builder text(Text text) {
-            this.text = text;
+        public Builder Component(Component Component) {
+            this.Component = Component;
             return this;
         }
 
@@ -88,14 +88,14 @@ public final class ReGlassApi {
             return this.focus(amount);
         }
 
-        public void render() {
+public void render() {
             float finalCornerRadius = this.cornerRadius < 0 ? 0.5f * Math.min(this.width, this.height) : this.cornerRadius;
             Matrix3x2f pose = new Matrix3x2f();
             // In 1.21.1, there is no context.state.addSpecialElement / scissorStack accessor.
             // Register the widget directly with LiquidGlassUniforms for the blur pass.
             LiquidGlassUniforms.get().addWidget(new LiquidGlassGuiElementRenderState(
                     this.x, this.y, this.x + this.width, this.y + this.height,
-                    finalCornerRadius, this.text, this.style, pose, null,
+                    finalCornerRadius, this.Component, this.style, pose, null,
                     this.hoverAmount, this.focusAmount
             ));
         }

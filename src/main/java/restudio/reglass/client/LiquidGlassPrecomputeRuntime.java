@@ -6,10 +6,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gl.Framebuffer;
-import net.minecraft.client.gl.SimpleFramebuffer;
-import net.minecraft.util.Identifier;
+import net.minecraft.client.Minecraft;import net.minecraft.server.packs.resources.Resource;
+import com.mojang.blaze3d.pipeline.RenderTarget;
+import com.mojang.blaze3d.pipeline.TextureTarget;
+import net.minecraft.resources.ResourceLocation;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL13;
@@ -22,10 +22,10 @@ import restudio.reglass.client.api.ReGlassConfig;
 /**
  * Two-pass Gaussian blur precomputation runtime.
  * <p>
- * Reads the main framebuffer and blurs it at each requested radius
- * (horizontal pass → temp FBO, vertical pass → per-radius output FBO).
+ * Reads the main RenderTarget and blurs it at each requested radius
+ * (horizontal pass â†’ temp FBO, vertical pass â†’ per-radius output FBO).
  * Uses raw OpenGL shader compilation, uniform-buffer objects and
- * Minecraft 1.21.1 {@link Framebuffer} as off-screen render targets.
+ * Minecraft 1.21.1 {@link RenderTarget} as off-screen render targets.
  */
 public final class LiquidGlassPrecomputeRuntime {
 
@@ -57,10 +57,10 @@ public final class LiquidGlassPrecomputeRuntime {
     private int quadVbo = -1;
 
     /** Intermediate FBO between the two blur passes. */
-    private Framebuffer tempFb;
+    private RenderTarget tempFb;
 
     /** Per-radius output FBOs. */
-    private final HashMap<Integer, Framebuffer> outputByRadius = new HashMap<>();
+    private final HashMap<Integer, RenderTarget> outputByRadius = new HashMap<>();
 
     private List<Integer> requestedRadii = new ArrayList<>();
 
@@ -72,10 +72,10 @@ public final class LiquidGlassPrecomputeRuntime {
 
     private static String readResource(String path) {
         try {
-            var opt = MinecraftClient.getInstance().getResourceManager()
-                    .getResource(Identifier.of("reglass", path));
+            var opt = Minecraft.getInstance().getResourceManager()
+                    .getResource(ResourceLocation.fromNamespaceAndPath("reglass", path));
             if (opt.isPresent()) {
-                try (var is = opt.get().getInputStream()) {
+                try (var is = opt.get().open()) {
                     return new String(is.readAllBytes(), StandardCharsets.UTF_8);
                 }
             }
@@ -170,7 +170,7 @@ public final class LiquidGlassPrecomputeRuntime {
         GL30.glBindVertexArray(quadVao);
         GL30.glBindBuffer(GL30.GL_ARRAY_BUFFER, quadVbo);
 
-        // Four corners of a unit quad – vertex shader maps [0,1] → NDC [-1,1].
+        // Four corners of a unit quad â€“ vertex shader maps [0,1] â†’ NDC [-1,1].
         float[] verts = {
                 0f, 0f, 0f,
                 1f, 0f, 0f,
@@ -192,31 +192,31 @@ public final class LiquidGlassPrecomputeRuntime {
     }
 
     private void ensureTempFb(int w, int h) {
-        if (tempFb != null && tempFb.textureWidth == w && tempFb.textureHeight == h) {
+        if (tempFb != null && tempFb.width == w && tempFb.height == h) {
             return;
         }
         if (tempFb != null) {
-            tempFb.delete();
+            tempFb.destroyBuffers();
         }
         tempFb = allocateFb(w, h);
     }
 
     private void ensureOutputFb(int w, int h, int radius) {
-        Framebuffer fb = outputByRadius.get(radius);
-        if (fb != null && fb.textureWidth == w && fb.textureHeight == h) {
+        RenderTarget fb = outputByRadius.get(radius);
+        if (fb != null && fb.width == w && fb.height == h) {
             return;
         }
         if (fb != null) {
-            fb.delete();
+            fb.destroyBuffers();
         }
         outputByRadius.put(radius, allocateFb(w, h));
     }
 
-    private static Framebuffer allocateFb(int w, int h) {
-        Framebuffer fb = new SimpleFramebuffer(w, h, false, false);
+    private static RenderTarget allocateFb(int w, int h) {
+        RenderTarget fb = new TextureTarget(w, h, false, false);
 
         // Set bilinear filtering and clamp-to-edge on the colour attachment.
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, fb.getColorAttachment());
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, fb.getColorTextureId());
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL12.GL_CLAMP_TO_EDGE);
@@ -285,7 +285,7 @@ public final class LiquidGlassPrecomputeRuntime {
             buf.putFloat((float) radius);
             buf.putFloat(0f);
 
-            // float Weights[65] – std140 pads each float to 16 bytes.
+            // float Weights[65] â€“ std140 pads each float to 16 bytes.
             for (int i = 0; i <= MAX_RADIUS; i++) {
                 buf.putFloat((i <= radius) ? weights[i] : 0f);
                 buf.putFloat(0f); // pad
@@ -316,10 +316,10 @@ public final class LiquidGlassPrecomputeRuntime {
         initUbos();
         initQuad();
 
-        MinecraftClient mc = MinecraftClient.getInstance();
-        Framebuffer main = mc.getFramebuffer();
-        int w = main.textureWidth;
-        int h = main.textureHeight;
+        Minecraft mc = Minecraft.getInstance();
+        RenderTarget main = mc.getMainRenderTarget();
+        int w = main.width;
+        int h = main.height;
         if (w <= 0 || h <= 0) return;
 
         ensureTempFb(w, h);
@@ -332,7 +332,7 @@ public final class LiquidGlassPrecomputeRuntime {
             max = 1;
         }
 
-        // ── Save GL state ────────────────────────────────────────────
+        // â”€â”€ Save GL state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         int prevProgram = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
         int prevFbo = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
         int prevVao = GL11.glGetInteger(GL30.GL_VERTEX_ARRAY_BINDING);
@@ -345,50 +345,50 @@ public final class LiquidGlassPrecomputeRuntime {
         GL11.glDisable(GL11.GL_DEPTH_TEST);
         GL11.glDisable(GL11.GL_BLEND);
 
-        // ── Configure shader ─────────────────────────────────────────
+        // â”€â”€ Configure shader â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         GL20.glUseProgram(program);
         GL20.glUniform1i(uSampler, 0); // DiffuseSampler = texture unit 0
 
         // Bind sampler-info UBO (same for all passes).
         GL31.glBindBufferBase(GL31.GL_UNIFORM_BUFFER, SI_BINDING, uboSamplerInfo);
 
-        // ── Blur passes ──────────────────────────────────────────────
+        // â”€â”€ Blur passes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         for (int k = 0; k < max; k++) {
             int radius = requestedRadii.get(k);
             if (radius <= 0) continue;
 
             ensureOutputFb(w, h, radius);
 
-            // ── Pass 1: horizontal blur ──────────────────────────────
-            // Source: main framebuffer → dest: tempFb
+            // â”€â”€ Pass 1: horizontal blur â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // Source: main RenderTarget â†’ dest: tempFb
             uploadConfig(uboConfigX, 1f, 0f, radius);
             GL31.glBindBufferBase(GL31.GL_UNIFORM_BUFFER, CFG_BINDING, uboConfigX);
 
-            tempFb.beginWrite(true);
+            tempFb.bindWrite(true);
 
             GL13.glActiveTexture(GL13.GL_TEXTURE0);
-            GL11.glBindTexture(GL11.GL_TEXTURE_2D, main.getColorAttachment());
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, main.getColorTextureId());
 
             GL30.glBindVertexArray(quadVao);
             GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
 
-            // ── Pass 2: vertical blur ────────────────────────────────
-            // Source: tempFb → dest: outputByRadius[radius]
+            // â”€â”€ Pass 2: vertical blur â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // Source: tempFb â†’ dest: outputByRadius[radius]
             uploadConfig(uboConfigY, 0f, 1f, radius);
             GL31.glBindBufferBase(GL31.GL_UNIFORM_BUFFER, CFG_BINDING, uboConfigY);
 
-            Framebuffer output = outputByRadius.get(radius);
-            output.beginWrite(true);
+            RenderTarget output = outputByRadius.get(radius);
+            output.bindWrite(true);
 
             GL13.glActiveTexture(GL13.GL_TEXTURE0);
-            GL11.glBindTexture(GL11.GL_TEXTURE_2D, tempFb.getColorAttachment());
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, tempFb.getColorTextureId());
 
             GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
         }
 
         GL30.glBindVertexArray(prevVao);
 
-        // ── Restore GL state ─────────────────────────────────────────
+        // â”€â”€ Restore GL state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         GL13.glActiveTexture(GL13.GL_TEXTURE0);
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, prevTexture0);
         GL13.glActiveTexture(prevActiveTexture);
@@ -399,10 +399,16 @@ public final class LiquidGlassPrecomputeRuntime {
     }
 
     /**
-     * Returns the blurred output {@link Framebuffer} for the given radius,
+     * Returns the blurred output {@link RenderTarget} for the given radius,
      * or {@code null} if that radius has not been computed yet.
      */
-    public Framebuffer getBlurredViewForRadius(int radius) {
+    public void invalidateBuffers() {
+        if (tempFb != null) { tempFb.destroyBuffers(); tempFb = null; }
+        for (RenderTarget fb : outputByRadius.values()) { fb.destroyBuffers(); }
+        outputByRadius.clear();
+    }
+
+    public RenderTarget getBlurredViewForRadius(int radius) {
         return outputByRadius.get(radius);
     }
 }

@@ -6,14 +6,14 @@ import java.io.Reader;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import net.fabricmc.loader.api.FabricLoader;
+import net.neoforged.fml.loading.FMLPaths;
 import restudio.reglass.client.api.ReGlassConfig;
 
 public final class ReGlassSettingsIO {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private static Path configPath() {
-        return FabricLoader.getInstance().getConfigDir().resolve("reglass.json");
+        return FMLPaths.CONFIGDIR.get().resolve("reglass.json");
     }
 
     public static void loadIntoMemory() {
@@ -140,7 +140,7 @@ public final class ReGlassSettingsIO {
         public boolean features_buttons = true;
         public boolean features_sliders = true;
         public boolean features_hotbar = true;
-        public boolean features_cancelScreenDarkening = true;
+        public boolean features_cancelScreenDarkening = false;
         public boolean features_pixelatedGrid = false;
 
         public int tintColor = 0x000000;

@@ -2,11 +2,11 @@ package restudio.reglass.client.screen.widget;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.screen.narration.NarrationMessageBuilder;
-import net.minecraft.text.Text;
-import net.minecraft.util.math.MathHelper;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.narration.NarrationElementOutput;
+import net.minecraft.network.chat.Component;
+import net.minecraft.util.Mth;
 
 import java.util.List;
 import java.util.Set;
@@ -19,7 +19,7 @@ public class ScrollableListWidget<E extends ScrollableListWidget.Entry<E>> exten
     private double scrollAmount;
 
     public ScrollableListWidget(Screen screen, int x, int y, int width, int height, int itemHeight) {
-        super(screen, x, y, width, height, Text.empty());
+        super(screen, x, y, width, height, Component.empty());
         this.itemHeight = itemHeight;
     }
 
@@ -62,7 +62,7 @@ public class ScrollableListWidget<E extends ScrollableListWidget.Entry<E>> exten
     }
 
     @Override
-    public void renderWidget(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void renderWidget(GuiGraphics context, int mouseX, int mouseY, float delta) {
         context.enableScissor(getX(), getY(), getX() + width, getY() + height);
 
         int top = getY() - (int) this.scrollAmount + verticalPadding;
@@ -99,7 +99,7 @@ public class ScrollableListWidget<E extends ScrollableListWidget.Entry<E>> exten
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
         if (isMouseOver(mouseX, mouseY)) {
             this.scrollAmount -= verticalAmount * (this.itemHeight / 2.0);
-            this.scrollAmount = MathHelper.clamp(this.scrollAmount, 0, Math.max(0, this.getMaxScroll()));
+            this.scrollAmount = Mth.clamp(this.scrollAmount, 0, Math.max(0, this.getMaxScroll()));
             return true;
         }
         return false;
@@ -118,7 +118,7 @@ public class ScrollableListWidget<E extends ScrollableListWidget.Entry<E>> exten
     }
 
     @Override
-    protected void appendClickableNarrations(NarrationMessageBuilder builder) {
+    protected void updateWidgetNarration(NarrationElementOutput builder) {
     }
 
     public static abstract class Entry<E extends Entry<E>> {
@@ -131,7 +131,7 @@ public class ScrollableListWidget<E extends ScrollableListWidget.Entry<E>> exten
             this.height = height;
         }
 
-        public void render(DrawContext context, int index, int x, int y, int width, int height, int mouseX, int mouseY, boolean hovered, float delta) {
+        public void render(GuiGraphics context, int index, int x, int y, int width, int height, int mouseX, int mouseY, boolean hovered, float delta) {
             this.x = x;
             this.y = y;
             this.width = width;

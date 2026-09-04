@@ -58,7 +58,7 @@ public class ReGlassConfig {
         public boolean buttons = true;
         public boolean sliders = true;
         public boolean hotbar = true;
-        public boolean cancelScreenDarkening = true;
+        public boolean cancelScreenDarkening = false;
         public boolean pixelatedGrid = false;
 
         public final Set<String> classWhitelist = new HashSet<>();

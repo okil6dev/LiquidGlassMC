@@ -3,8 +3,8 @@ package restudio.reglass.client;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.util.Identifier;
+import net.minecraft.client.Minecraft;import net.minecraft.server.packs.resources.Resource;
+import net.minecraft.resources.ResourceLocation;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
@@ -154,11 +154,11 @@ public final class LiquidGlassPipelines {
     }
 
     private static String loadSource(String path) {
-        var id = Identifier.of("reglass", path);
         try {
-            var opt = MinecraftClient.getInstance().getResourceManager().getResource(id);
+            var opt = Minecraft.getInstance().getResourceManager()
+                    .getResource(ResourceLocation.fromNamespaceAndPath("reglass", path));
             if (opt.isPresent()) {
-                try (InputStream is = opt.get().getInputStream()) {
+                try (InputStream is = opt.get().open()) {
                     return new String(is.readAllBytes(), StandardCharsets.UTF_8);
                 }
             }

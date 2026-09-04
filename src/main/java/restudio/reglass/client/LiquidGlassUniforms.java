@@ -4,9 +4,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.ScreenRect;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.navigation.ScreenRectangle;
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.opengl.GL11;
 import restudio.reglass.client.api.ReGlassConfig;
@@ -22,9 +22,9 @@ public final class LiquidGlassUniforms {
 
     public static LiquidGlassUniforms get() { return INSTANCE; }
 
-    // ── Stored uniform data (raw float arrays) ──
+    // â”€â”€ Stored uniform data (raw float arrays) â”€â”€
 
-    /** samplerInfo: vec4 (outW, outH, outW, outH) – 4 floats */
+    /** samplerInfo: vec4 (outW, outH, outW, outH) â€“ 4 floats */
     private final float[] samplerInfoData = new float[4];
 
     /**
@@ -50,7 +50,7 @@ public final class LiquidGlassUniforms {
     private final float[] customUniformsData = new float[29];
 
     /**
-     * widgetInfo: header vec4 + MAX_WIDGETS × 12 vec4 rows.
+     * widgetInfo: header vec4 + MAX_WIDGETS Ã— 12 vec4 rows.
      * Total float slots: 4 (header) + MAX_WIDGETS * 12 * 4 = 4 + 3072 = 3076.
      * Row layout per widget:
      *   0: rect (x, y, w, h)
@@ -71,10 +71,10 @@ public final class LiquidGlassUniforms {
     private static final int WIDGET_ROWS = 12;
     private final float[] widgetInfoData = new float[WIDGET_HEADER_FLOATS + MAX_WIDGETS * WIDGET_ROWS * WIDGET_ROW_FLOATS];
 
-    /** bgConfig: shadowExpand, shadowFactor, shadowOffsetX, shadowOffsetY – 4 floats */
+    /** bgConfig: shadowExpand, shadowFactor, shadowOffsetX, shadowOffsetY â€“ 4 floats */
     private final float[] bgConfigData = new float[4];
 
-    // ── Widget tracking ──
+    // â”€â”€ Widget tracking â”€â”€
 
     private final List<LiquidGlassGuiElementRenderState> widgets = new ArrayList<>();
     private boolean screenWantsBlur = false;
@@ -92,7 +92,7 @@ public final class LiquidGlassUniforms {
 
     private LiquidGlassUniforms() {}
 
-    // ── Frame lifecycle ──
+    // â”€â”€ Frame lifecycle â”€â”€
 
     public void beginFrame(double dtSeconds) {
         widgets.clear();
@@ -104,12 +104,12 @@ public final class LiquidGlassUniforms {
 
     public void setScreenWantsBlur(boolean wantsBlur) { this.screenWantsBlur = wantsBlur; }
 
-    // ── Uniform upload (store into class fields) ──
+    // â”€â”€ Uniform upload (store into class fields) â”€â”€
 
     public void uploadSharedUniforms() {
-        MinecraftClient mc = MinecraftClient.getInstance();
-        int outW = mc.getFramebuffer().textureWidth;
-        int outH = mc.getFramebuffer().textureHeight;
+        Minecraft mc = Minecraft.getInstance();
+        int outW = mc.getMainRenderTarget().width;
+        int outH = mc.getMainRenderTarget().height;
 
         // samplerInfo: vec2(outW, outH), vec2(outW, outH)
         samplerInfoData[0] = (float) outW;
@@ -119,9 +119,9 @@ public final class LiquidGlassUniforms {
 
         double[] mx = new double[1];
         double[] my = new double[1];
-        GLFW.glfwGetCursorPos(mc.getWindow().getHandle(), mx, my);
-        float scale = (float) mc.getWindow().getScaleFactor();
-        int fbH = mc.getFramebuffer().textureHeight;
+        GLFW.glfwGetCursorPos(mc.getWindow().getWindow(), mx, my);
+        float scale = (float) mc.getWindow().getGuiScale();
+        int fbH = mc.getMainRenderTarget().height;
 
         float time = (float) GLFW.glfwGetTime();
         ReGlassConfig config = ReGlassConfig.INSTANCE;
@@ -164,14 +164,14 @@ public final class LiquidGlassUniforms {
         customUniformsData[28] = ReGlassAnim.INSTANCE.focusBorderSpeed();
 
         // bgConfig
-        float s = (float) mc.getWindow().getScaleFactor();
+        float s = (float) mc.getWindow().getGuiScale();
         bgConfigData[0] = ReGlassAnim.INSTANCE.shadowExpand();
         bgConfigData[1] = ReGlassAnim.INSTANCE.shadowFactor();
         bgConfigData[2] = ReGlassAnim.INSTANCE.shadowOffsetX() * s;
         bgConfigData[3] = ReGlassAnim.INSTANCE.shadowOffsetY() * s;
     }
 
-    public void tryApplyBlur(DrawContext context) {
+    public void tryApplyBlur(GuiGraphics context) {
         // In 1.21.1, GuiRenderState / GuiRenderStateAccessor are not available.
         // Blur application is handled by the screen/background rendering system directly.
         // This method is intentionally a no-op; the blur pipeline runs in
@@ -201,9 +201,9 @@ public final class LiquidGlassUniforms {
     }
 
     public void uploadWidgetInfo() {
-        MinecraftClient mc = MinecraftClient.getInstance();
-        int fbH = mc.getFramebuffer().textureHeight;
-        float scale = (float) mc.getWindow().getScaleFactor();
+        Minecraft mc = Minecraft.getInstance();
+        int fbH = mc.getMainRenderTarget().height;
+        float scale = (float) mc.getWindow().getGuiScale();
 
         HashSet<Integer> requested = new HashSet<>();
         for (LiquidGlassGuiElementRenderState w : widgets) {
@@ -217,7 +217,7 @@ public final class LiquidGlassUniforms {
         blurRadiusToIndex.clear();
         for (int i = 0; i < usedBlurRadiiOrdered.size(); i++) blurRadiusToIndex.put(usedBlurRadiiOrdered.get(i), i);
 
-        // Header: vec4 alignment → store count in first float, rest padding
+        // Header: vec4 alignment â†’ store count in first float, rest padding
         widgetInfoData[0] = (float) widgets.size();
         widgetInfoData[1] = 0f;
         widgetInfoData[2] = 0f;
@@ -289,12 +289,12 @@ public final class LiquidGlassUniforms {
                             widgetInfoData[offset + 3] = 0f;
                         }
                         case 7 -> { // scissor
-                            ScreenRect sc = w.scissorArea();
+                            ScreenRectangle sc = w.scissorArea();
                             if (sc != null) {
-                                float sL = sc.getLeft() * scale;
-                                float sR = sc.getRight() * scale;
-                                float sT = sc.getTop() * scale;
-                                float sB = sc.getBottom() * scale;
+                                float sL = sc.left() * scale;
+                                float sR = sc.right() * scale;
+                                float sT = sc.top() * scale;
+                                float sB = sc.bottom() * scale;
                                 widgetInfoData[offset]     = sL;
                                 widgetInfoData[offset + 1] = fbH - sB;
                                 widgetInfoData[offset + 2] = sR;
@@ -302,8 +302,8 @@ public final class LiquidGlassUniforms {
                             } else {
                                 widgetInfoData[offset]     = 0f;
                                 widgetInfoData[offset + 1] = 0f;
-                                widgetInfoData[offset + 2] = (float) mc.getFramebuffer().textureWidth;
-                                widgetInfoData[offset + 3] = (float) mc.getFramebuffer().textureHeight;
+                                widgetInfoData[offset + 2] = (float) mc.getMainRenderTarget().width;
+                                widgetInfoData[offset + 3] = (float) mc.getMainRenderTarget().height;
                             }
                         }
                         case 8 -> { // shadow params
@@ -356,7 +356,7 @@ public final class LiquidGlassUniforms {
         }
     }
 
-    // ── Accessors ──
+    // â”€â”€ Accessors â”€â”€
 
     public int getCount() { return widgets.size(); }
     public List<Integer> getUsedBlurRadiiOrdered() { return usedBlurRadiiOrdered; }
@@ -387,6 +387,6 @@ public final class LiquidGlassUniforms {
         return List.copyOf(widgets);
     }
 
-    /** The blur radius → index mapping computed during uploadWidgetInfo(). */
+    /** The blur radius â†’ index mapping computed during uploadWidgetInfo(). */
     public HashMap<Integer, Integer> getBlurRadiusToIndex() { return blurRadiusToIndex; }
 }

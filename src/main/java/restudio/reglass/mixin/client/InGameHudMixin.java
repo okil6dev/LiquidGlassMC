@@ -1,14 +1,14 @@
 package restudio.reglass.mixin.client;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.hud.InGameHud;
-import net.minecraft.client.render.RenderTickCounter;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.util.Arm;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.Gui;
+import net.minecraft.client.DeltaTracker;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.entity.HumanoidArm;
 
-import net.minecraft.world.GameMode;
+import net.minecraft.world.level.GameType;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -21,18 +21,18 @@ import restudio.reglass.client.api.ReGlassApi;
 import restudio.reglass.client.api.ReGlassConfig;
 import restudio.reglass.client.api.WidgetStyle;
 
-@Mixin(InGameHud.class)
+@Mixin(Gui.class)
 public abstract class InGameHudMixin {
 
-    @Shadow @Final private MinecraftClient client;
+    @Shadow @Final private Minecraft minecraft;
 
     @Shadow
-    protected abstract void renderHotbarItem(
-            DrawContext context,
+    protected abstract void renderSlot(
+            GuiGraphics context,
             int x,
             int y,
-            RenderTickCounter tickCounter,
-            PlayerEntity player,
+            DeltaTracker tickCounter,
+            Player player,
             ItemStack stack,
             int seed
     );
@@ -40,35 +40,35 @@ public abstract class InGameHudMixin {
     @Unique private double reglass$slotBlobX = Double.NaN;
     @Unique private int reglass$lastSelected = -1;
 
-    @Inject(method = "renderHotbar", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "renderItemHotbar", at = @At("HEAD"), cancellable = true)
     private void reglass$onRenderHotbar(
-            DrawContext context, RenderTickCounter tickCounter, CallbackInfo ci
+            GuiGraphics context, DeltaTracker tickCounter, CallbackInfo ci
     ) {
         if (!ReGlassConfig.INSTANCE.features.enableRedesign
                 || !ReGlassConfig.INSTANCE.features.hotbar) {
             return;
         }
-        if (this.client.interactionManager.getCurrentGameMode() == GameMode.SPECTATOR) {
+        if (this.minecraft.gameMode.getPlayerMode() == GameType.SPECTATOR) {
             return;
         }
 
-        PlayerEntity player = this.getCameraPlayer();
+        Player player = this.getCameraPlayer();
         if (player == null) {
             return;
         }
 
-        if (this.client.options.hudHidden) {
+        if (this.minecraft.options.hideGui) {
             return;
         }
 
         ci.cancel();
 
-        this.client.getProfiler().push("reglass-hotbar");
+        this.minecraft.getProfiler().push("reglass-hotbar");
 
         int hotbarWidth = 182;
         int hotbarHeight = 22;
-        int x = this.client.getWindow().getScaledWidth() / 2 - hotbarWidth / 2;
-        int offhandY = this.client.getWindow().getScaledHeight() - hotbarHeight;
+        int x = this.minecraft.getWindow().getGuiScaledWidth() / 2 - hotbarWidth / 2;
+        int offhandY = this.minecraft.getWindow().getGuiScaledHeight() - hotbarHeight;
 
         ReGlassApi.create(context)
                 .dimensions(x, offhandY, hotbarWidth, hotbarHeight)
@@ -76,7 +76,7 @@ public abstract class InGameHudMixin {
                 .style(new WidgetStyle().tint(0x000000, 0.3f))
                 .render();
 
-        int selectedSlot = player.getInventory().selectedSlot;
+        int selectedSlot = player.getInventory().selected;
 
         int targetCircleX = x - 1 + selectedSlot * 20;
         if (Double.isNaN(this.reglass$slotBlobX)) {
@@ -85,7 +85,7 @@ public abstract class InGameHudMixin {
 
         double deltaTicks;
         try {
-            deltaTicks = tickCounter.getTickDelta(true);
+            deltaTicks = tickCounter.getGameTimeDeltaPartialTick(true);
         } catch (Throwable t) {
             deltaTicks = 1.0 / 60.0 * 20.0;
         }
@@ -112,21 +112,21 @@ public abstract class InGameHudMixin {
         for (int i = 0; i < 9; ++i) {
             int itemX = x + 3 + i * 20;
             int itemY = offhandY + 3;
-            this.renderHotbarItem(
+            this.renderSlot(
                     context,
                     itemX,
                     itemY,
                     tickCounter,
                     player,
-                    player.getInventory().getStack(i),
+                    player.getInventory().getItem(i),
                     i + 1
             );
         }
 
-        ItemStack offHandStack = player.getOffHandStack();
+        ItemStack offHandStack = player.getOffhandItem();
         if (!offHandStack.isEmpty()) {
-            Arm arm = player.getMainArm().getOpposite();
-            int offhandX = (arm == Arm.LEFT ? x - hotbarHeight - 4 : x + hotbarWidth + 4);
+            HumanoidArm HumanoidArm = player.getMainArm().getOpposite();
+            int offhandX = (HumanoidArm == HumanoidArm.LEFT ? x - hotbarHeight - 4 : x + hotbarWidth + 4);
 
             ReGlassApi.create(context)
                     .dimensions(offhandX, offhandY, hotbarHeight, hotbarHeight)
@@ -134,16 +134,16 @@ public abstract class InGameHudMixin {
                     .style(new WidgetStyle().tint(0x000000, 0.3f))
                     .render();
 
-            this.renderHotbarItem(context, offhandX + 3, offhandY + 3, tickCounter, player, offHandStack, 0);
+            this.renderSlot(context, offhandX + 3, offhandY + 3, tickCounter, player, offHandStack, 0);
         }
 
         LiquidGlassUniforms.get().tryApplyBlur(context);
 
-        this.client.getProfiler().pop();
+        this.minecraft.getProfiler().pop();
     }
 
     @Shadow
-    private PlayerEntity getCameraPlayer() {
+    private Player getCameraPlayer() {
         throw new AssertionError("Mixin application failed!");
     }
 }
